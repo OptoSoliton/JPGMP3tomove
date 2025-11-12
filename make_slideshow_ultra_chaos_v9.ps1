@@ -184,10 +184,23 @@ function Build-Graph([string]$graphPath, [int]$count, [string]$Lstr, [string]$Ts
   [IO.File]::WriteAllText($metaPath,  $mb.ToString())
 }
 
+function Format-ProcessArgument([string]$arg) {
+  if ([string]::IsNullOrEmpty($arg)) { return '""' }
+  if ($arg -notmatch '[\s\"`]') { return $arg }
+
+  $escaped = $arg -replace '(\\*)"', "$1$1\""
+  $escaped = $escaped -replace '(\\+)$', "$1$1"
+  return '"' + $escaped + '"'
+}
+
+function Join-ProcessArguments([string[]]$args) {
+  return ($args | ForEach-Object { Format-ProcessArgument $_ }) -join ' '
+}
+
 function Run-FF([string[]]$args) {
   $psi = New-Object System.Diagnostics.ProcessStartInfo
   $psi.FileName = $ffmpeg
-  $psi.Arguments = ($args -join " ")
+  $psi.Arguments = Join-ProcessArguments $args
   $psi.RedirectStandardOutput = $true
   $psi.RedirectStandardError  = $true
   $psi.UseShellExecute = $false
@@ -259,6 +272,8 @@ for ($seg=$StartChunk; $seg -le $EndChunk; $seg++) {
     $T10 = "10.0"
     $S10 = ([Math]::Max($L - 10.0, 0.1)).ToString($culture)
     Build-Graph -graphPath $graph -count $count -Lstr $Lstr -Tstr $T10 -Sstr $S10 -transitions $trans_SAFE[0..1] -fxs $fxs -metaPath $metaTxt
+    Log ("[segment {0}] effects & transitions (fallback A):" -f $seg)
+    Get-Content -LiteralPath $metaTxt | ForEach-Object { Log "  $_" }
     $args[$args.IndexOf("-filter_complex_script")+1] = $graph
     $code = Run-FF ($args.ToArray())
     if ($code -ne 0) {
@@ -266,6 +281,8 @@ for ($seg=$StartChunk; $seg -le $EndChunk; $seg++) {
       $T1 = "1.0"
       $S1 = ([Math]::Max($L - 1.0, 0.1)).ToString($culture)
       Build-Graph -graphPath $graph -count $count -Lstr $Lstr -Tstr $T1 -Sstr $S1 -transitions @('fade') -fxs $fxs -metaPath $metaTxt
+      Log ("[segment {0}] effects & transitions (fallback B):" -f $seg)
+      Get-Content -LiteralPath $metaTxt | ForEach-Object { Log "  $_" }
       $args[$args.IndexOf("-filter_complex_script")+1] = $graph
       $code = Run-FF ($args.ToArray())
       if ($code -ne 0) { throw "FFmpeg failed to build segment $seg even after fallbacks (exit=$code)." }
