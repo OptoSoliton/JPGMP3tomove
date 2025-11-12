@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableDelayedExpansion
+setlocal EnableExtensions EnableDelayedExpansion
 title ULTRA CHAOS slideshow v9 - by ChatGPT
 
 REM ======= KONFIG =======
@@ -17,10 +17,33 @@ set "RECURSE=0"
 set "RESUME=1"
 set "VERBOSE=1"
 
-if not exist "make_slideshow_ultra_chaos_v9.ps1" (
-  echo [ERROR] make_slideshow_ultra_chaos_v9.ps1 not found. Keep both files in the same folder (with ffmpeg.exe & ffprobe.exe).
+set "EXIT_CODE=0"
+set "SCRIPT_DIR=%~dp0"
+if not defined SCRIPT_DIR set "SCRIPT_DIR=%CD%\"
+
+pushd "%SCRIPT_DIR%" >nul 2>&1
+if errorlevel 1 (
+  echo [ERROR] Nie mozna otworzyc folderu skryptu: %SCRIPT_DIR%
   pause
   exit /b 1
+)
+
+set "PS_SCRIPT=%SCRIPT_DIR%make_slideshow_ultra_chaos_v9.ps1"
+if not exist "%PS_SCRIPT%" (
+  echo [ERROR] make_slideshow_ultra_chaos_v9.ps1 not found. Keep both files in the same folder (with ffmpeg.exe ^& ffprobe.exe).
+  set "EXIT_CODE=1"
+  goto :end_with_pause
+)
+
+set "PS_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%PS_EXE%" set "PS_EXE=powershell.exe"
+
+for %%# in ("%PS_SCRIPT%" "ffmpeg.exe" "ffprobe.exe") do (
+  if not exist %%~# (
+    echo [ERROR] Brak pliku: %%~#
+    set "EXIT_CODE=1"
+    goto :end_with_pause
+  )
 )
 
 set "RECURSE_FLAG="
@@ -30,7 +53,7 @@ if "%VERBOSE%"=="1" set "VERBOSE_FLAG=-VerboseMode"
 set "RESUME_FLAG="
 if "%RESUME%"=="1" set "RESUME_FLAG=-Resume"
 
-powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0make_slideshow_ultra_chaos_v9.ps1" ^
+"%PS_EXE%" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" ^
   -OverlapRatio %OVERLAP_RATIO% ^
   -FPS %FPS% ^
   -WIDTH %WIDTH% ^
@@ -45,6 +68,18 @@ powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0make_slideshow
   %RESUME_FLAG% ^
   %VERBOSE_FLAG%
 
+set "EXIT_CODE=%ERRORLEVEL%"
+
+if not "%EXIT_CODE%"=="0" (
+  echo.
+  echo [ERROR] PowerShell zakonczyl sie z kodem %EXIT_CODE%.
+  goto :end_with_pause
+)
+
 echo.
 echo (Sprawdz log: _tmp_ultra_v9\make.log)
+
+:end_with_pause
 pause
+popd >nul 2>&1
+exit /b %EXIT_CODE%
